@@ -49,6 +49,16 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew --no-daemon assembleRelease
 
+      - name: Verify APK
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          for f in assets/index.html assets/words.json assets/fonts/newsreader-latin-400-normal.woff2 assets/fonts/jetbrains-mono-latin-400-normal.woff2; do
+            unzip -l "$APK" | grep -q " $f\$" || { echo "::error::APK is missing $f"; exit 1; }
+          done
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --print-certs "$APK" | grep -E "Signer #1 certificate (DN|SHA-256)"
+          "$BT/aapt2" dump badging "$APK" | grep -E "^package|sdkVersion|targetSdkVersion|application-label:"
+
       - name: Rename APK
         run: |
           mkdir -p out
