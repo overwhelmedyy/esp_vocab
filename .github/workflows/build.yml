@@ -18,12 +18,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Check words.json
         run: python3 -c "import json;d=json.load(open('web/words.json',encoding='utf-8'));w=d['words'];ids=[x['id'] for x in w];assert len(ids)==len(set(ids)),'duplicate id';print(len(w),'words OK')"
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
@@ -47,7 +47,14 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew --no-daemon assembleRelease
+        run: |
+          set -o pipefail
+          if ! ./gradlew --no-daemon assembleRelease 2>&1 | tee build.log; then
+            # 把错误原因写成注释，在 Actions 页面顶部直接可见
+            msg=$(grep -A10 "What went wrong" build.log | head -12 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=Gradle build failed::${msg:-see log}"
+            exit 1
+          fi
 
       - name: Verify APK
         run: |
