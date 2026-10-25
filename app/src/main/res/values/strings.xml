@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">西语词汇</string>
+    <string name="tts_missing">没有找到可用的西班牙语语音。请到 系统设置 → 文字转语音（TTS）里安装支持西班牙语的语音引擎或语音包。</string>
+</resources>

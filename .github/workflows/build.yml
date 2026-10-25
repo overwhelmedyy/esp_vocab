@@ -1,0 +1,73 @@
+name: Build APK
+
+# 推送到 main 分支时自动编译，并把 APK 发布到 Releases 页面。
+# 也可以在 Actions 页面手动点 "Run workflow" 重新编译。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check words.json
+        run: python3 -c "import json;d=json.load(open('web/words.json',encoding='utf-8'));w=d['words'];ids=[x['id'] for x in w];assert len(ids)==len(set(ids)),'duplicate id';print(len(w),'words OK')"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "Using release signing key"
+          else
+            echo "::warning::KEYSTORE_B64 secret not set — APK is signed with a throwaway debug key"
+          fi
+
+      - name: Build release APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: Rename APK
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/release/app-release.apk "out/esp_vocab-v1.0.${{ github.run_number }}.apk"
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: esp_vocab-v1.0.${{ github.run_number }}
+          path: out/*.apk
+
+      - name: Publish release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: 西语词汇 v1.0.${{ github.run_number }}
+          body: |
+            自动编译自 ${{ github.sha }}。
+            下载下面的 .apk 文件，在手机上安装即可（新版本可以直接覆盖安装，学习进度会保留）。
+          files: out/*.apk
+          make_latest: true
